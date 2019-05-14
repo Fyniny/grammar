@@ -7,8 +7,9 @@
 
 // ε的输入表现形式
 #define EMPTY "$"
+#define EMPTY_CHAR '$'
 typedef char Terminal;
-typedef std::string NonTerminal;
+typedef char NonTerminal;
 typedef std::string Prodution;
 
 class Grammar
@@ -91,16 +92,16 @@ public:
         this->m_termianlSet.insert('b');
         this->m_termianlSet.insert('c');
 
-        this->m_nonterminalSet.insert("S");
-        this->m_nonterminalSet.insert("Q");
-        this->m_nonterminalSet.insert("R");
+        this->m_nonterminalSet.insert('S');
+        this->m_nonterminalSet.insert('Q');
+        this->m_nonterminalSet.insert('R');
 
-        this->m_production["S"].insert("Qc");
-        this->m_production["S"].insert("c");
-        this->m_production["Q"].insert("Rb");
-        this->m_production["Q"].insert("b");
-        this->m_production["R"].insert("Sa");
-        this->m_production["R"].insert("a");
+        this->m_production['S'].insert("Qc");
+        this->m_production['S'].insert("c");
+        this->m_production['Q'].insert("Rb");
+        this->m_production['Q'].insert("b");
+        this->m_production['R'].insert("Sa");
+        this->m_production['R'].insert("a");
 
         // // S→AC S→B A→a C→c C→BC E→aA E→e
         // this->m_termianlSet.insert('a');

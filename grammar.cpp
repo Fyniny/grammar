@@ -40,7 +40,7 @@ std::set<NonTerminal> *Grammar::DerivateEmptyExpress()
                 // 注意:: string 迭代时 \0 不在迭代范围
                 for (auto c : express)
                 {
-                    if (derivateEmptyTerminalSet->find(c+"") == derivateEmptyTerminalSet->end())
+                    if (derivateEmptyTerminalSet->find(c) == derivateEmptyTerminalSet->end())
                     {
                         // A -> ε 不存在时,跳过前面插入语句
                         goto next;
@@ -206,13 +206,13 @@ void Grammar::ExtractLeftRecursion()
 // 转化间接左递归为直接左递归(若有)
 void Grammar::indirectRecursionToDirect(std::string express, NonTerminal Vn, std::vector<NonTerminal> &VnSet, std::set<std::string> &deletedProductions, std::set<std::string> &insertedProductions)
 {
-    NonTerminal ch = express.substr(0,1);
+    NonTerminal ch = express[0];
 
     if (!this->IsNonTerminal(ch) || VnSet.end() == std::find(VnSet.begin(), VnSet.end(), ch))
     {
         // Vn -> ch
         // ch 不在 Vn 中, 无需推导
-        if (Vn != "$")
+        if (Vn != EMPTY_CHAR)
         {
             return;
         }
@@ -224,10 +224,10 @@ void Grammar::indirectRecursionToDirect(std::string express, NonTerminal Vn, std
     for (auto pro : productions)
     {
         auto ss = (pro + express.substr(1)).c_str();
-        this->indirectRecursionToDirect(pro + express.substr(1), "$", VnSet, deletedProductions, insertedProductions);
+        this->indirectRecursionToDirect(pro + express.substr(1), EMPTY_CHAR, VnSet, deletedProductions, insertedProductions);
     }
 
-    if (Vn != "$")
+    if (Vn != EMPTY_CHAR)
     {
         deletedProductions.insert(express);
         return;
@@ -238,6 +238,10 @@ void Grammar::indirectRecursionToDirect(std::string express, NonTerminal Vn, std
 void Grammar::ExtractDirectRecursion()
 {
     for (auto ite = this->m_production.begin(); ite != this->m_production.end(); ite++) {
+        auto Vn = ite->first;
+        // 若有 S -> Sa
+        // 则可以推导 S -> S1d
+        int order = 1;
 
     }
 }

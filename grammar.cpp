@@ -199,7 +199,7 @@ void Grammar::ExtractLeftRecursion()
     // 化简
 
     // 消除直接左递归
-
+    this->ExtractDirectRecursion();
     nonTerminalArray.clear();
 }
 
@@ -235,14 +235,67 @@ void Grammar::indirectRecursionToDirect(std::string express, NonTerminal Vn, std
 }
 
 // 消除直接左递归
-void Grammar::ExtractDirectRecursion()
+bool Grammar::ExtractDirectRecursion()
 {
-    for (auto ite = this->m_production.begin(); ite != this->m_production.end(); ite++) {
-        auto Vn = ite->first;
-        // 若有 S -> Sa
-        // 则可以推导 S -> S1d
-        int order = 1;
+    NonTerminal allocNonTerminal = -1;
+    NonTerminal Vn;
+    bool hasLeftRecrusion = false;
+    // 除去含有左递归之后的产生式的集合的副本
+    std::set<Prodution> tmpProduction;
 
+    for (auto ite = this->m_production.begin(); ite != this->m_production.end(); ite++)
+    {
+        Vn = ite->first;
+        allocNonTerminal = -1;
+        hasLeftRecrusion = false;
+        tmpProduction.clear();
+
+        // 判断是否存在左递归
+        for (auto expression : ite->second)
+        {
+            if (expression[0] == Vn)
+            {
+                hasLeftRecrusion = true;
+                break;
+            }
+        }
+
+        if (!hasLeftRecrusion)
+        {
+            continue;
+        }
+
+        // 尝试分配新的非终结符
+        if ((allocNonTerminal = this->AllocNonTerminal()) == -1)
+        {
+            return false;
+        }
+
+        // 消除递归
+        // A -> Ab | a     ----------- 1
+        // A -> abB        ----------- 2
+        // B -> bB | ε     ----------- 3
+
+        // 将左递归部分从productionSet中删除,并改成有递归的形式加入allocNonTermianl集合
+        // 第3步实现
+        for (auto expression = ite->second.begin(); expression != ite->second.end(); expression++)
+        {
+            if ((*expression)[0] == Vn)
+            {
+                auto tmp = *expression;
+                expression = ite->second.erase(expression);
+                this->m_production[allocNonTerminal].insert(tmp.erase(0,1) + allocNonTerminal);
+            }
+        }
+
+        // 第2步实现
+        tmpProduction = ite->second;
+        ite->second.clear();
+        for (auto express : tmpProduction)
+        {
+            ite->second.insert(express + allocNonTerminal);
+        }
+        this->m_production[allocNonTerminal].insert(EMPTY);        
     }
 }
 
@@ -252,4 +305,33 @@ void Grammar::ExtractUnReachableProductions()
     std::set<NonTerminal> ReachChar;
 
     return;
+}
+
+// 申请新的非终结符,目前最多申请26个(即ABCD...)
+NonTerminal Grammar::AllocNonTerminal()
+{
+    NonTerminal termianl = this->m_NextAllocPos;
+    if (!(termianl >= 'A' && termianl <= 'Z'))
+    {
+        this->m_error = "超过所能分配的非终结符号的最大值\n";
+        return -1;
+    }
+
+    while (true)
+    {
+        // 已登记的非终结符表中不存在时,则可以分配
+        if (this->m_nonterminalSet.find(termianl) == this->m_nonterminalSet.end())
+        {
+            this->m_NextAllocPos++;
+            this->m_nonterminalSet.insert(termianl);
+            return termianl;
+        }
+
+        termianl = ++this->m_NextAllocPos;
+        if (!(termianl >= 'A' && termianl <= 'Z'))
+        {
+            this->m_error = "超过所能分配的非终结符号的最大值\n";
+            return -1;
+        }
+    }
 }

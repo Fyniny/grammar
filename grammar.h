@@ -27,7 +27,7 @@ private:
     // 消除ε表达式模块
 public:
     // 文法产生式---消除ε表达式
-    Grammar &RemoveEmptyExpression();
+    Grammar& RemoveEmptyExpression();
 
 private:
     // 获取可以推导出ε的非终结符集
@@ -41,7 +41,7 @@ private:
     // 转化间接左递归为直接左递归(若有),主要完成替换功能
     void indirectRecursionToDirect(std::string express, NonTerminal Vn, std::vector<NonTerminal> &VnSet, std::set<std::string> &deletedProductions, std::set<std::string> &insertedProductions);
     // 消除直接左递归
-    void ExtractDirectRecursion();
+    bool ExtractDirectRecursion();
     // 化简产生式,消除不可达的表达式
 public:
     void ExtractUnReachableProductions();
@@ -49,23 +49,24 @@ public:
 public:
     Grammar()
     {
+        this->m_NextAllocPos = 'A';
         // S→aA，A→BC，B→bB，C→cC，B→ε，C→ε
         // S→aA，A→BC，B→bB，C→cC，A→C，B→b，S→a，A→B，C→c
-        // this->m_nonterminalSet.insert('S');
-        // this->m_nonterminalSet.insert('A');
-        // this->m_nonterminalSet.insert('B');
-        // this->m_nonterminalSet.insert('C');
+        this->m_nonterminalSet.insert('S');
+        this->m_nonterminalSet.insert('A');
+        this->m_nonterminalSet.insert('B');
+        this->m_nonterminalSet.insert('C');
 
-        // this->m_termianlSet.insert('a');
-        // this->m_termianlSet.insert('b');
-        // this->m_termianlSet.insert('c');
+        this->m_termianlSet.insert('a');
+        this->m_termianlSet.insert('b');
+        this->m_termianlSet.insert('c');
 
-        // this->m_production['S'].insert("aA");
-        // this->m_production['A'].insert("BC");
-        // this->m_production['B'].insert("bB");
-        // this->m_production['C'].insert("cC");
-        // this->m_production['B'].insert("$");
-        // this->m_production['C'].insert("$");
+        this->m_production['S'].insert("aA");
+        this->m_production['A'].insert("BC");
+        this->m_production['B'].insert("bB");
+        this->m_production['C'].insert("cC");
+        this->m_production['B'].insert("$");
+        this->m_production['C'].insert("$");
 
         // S→aD，S→bB，A→BC，D→AC，B→bB，C→cC，B→ε，C→ε
         // this->m_nonterminalSet.insert('S');
@@ -88,20 +89,20 @@ public:
         // this->m_production['C'].insert("$");
 
         // S→Qc S→c Q→Rb,Q→b,R→Sa,R→a
-        this->m_termianlSet.insert('a');
-        this->m_termianlSet.insert('b');
-        this->m_termianlSet.insert('c');
+        // this->m_termianlSet.insert('a');
+        // this->m_termianlSet.insert('b');
+        // this->m_termianlSet.insert('c');
 
-        this->m_nonterminalSet.insert('S');
-        this->m_nonterminalSet.insert('Q');
-        this->m_nonterminalSet.insert('R');
+        // this->m_nonterminalSet.insert('S');
+        // this->m_nonterminalSet.insert('Q');
+        // this->m_nonterminalSet.insert('R');
 
-        this->m_production['S'].insert("Qc");
-        this->m_production['S'].insert("c");
-        this->m_production['Q'].insert("Rb");
-        this->m_production['Q'].insert("b");
-        this->m_production['R'].insert("Sa");
-        this->m_production['R'].insert("a");
+        // this->m_production['S'].insert("Qc");
+        // this->m_production['S'].insert("c");
+        // this->m_production['Q'].insert("Rb");
+        // this->m_production['Q'].insert("b");
+        // this->m_production['R'].insert("Sa");
+        // this->m_production['R'].insert("a");
 
         // // S→AC S→B A→a C→c C→BC E→aA E→e
         // this->m_termianlSet.insert('a');
@@ -125,6 +126,14 @@ public:
 
     bool IsTerminal() { return true; }
     bool IsNonTerminal(NonTerminal ch) { return true; }
+
+private:
+    // 存放错误信息
+    std::string m_error;
+    // 记录下一次申请非终极符的起始位置,应被初始化为 A
+    NonTerminal m_NextAllocPos;
+    // 申请新的非终结符,目前最多申请26个(即ABCD...)
+    NonTerminal AllocNonTerminal();
 };
 
 #endif

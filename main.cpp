@@ -8,4 +8,5 @@ int main() {
     g.RemoveEmptyExpression();
     g.ExtractLeftRecursion();
     return 0;
+    
 }

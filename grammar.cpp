@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <algorithm>
+#include <queue>
 
 static void extractEmpty(int startPos, NonTerminal Vn, std::string express, std::set<std::string> &expressSet);
 
@@ -196,10 +197,12 @@ void Grammar::ExtractLeftRecursion()
         insertedProductions.clear();
     }
 
-    // 化简
-
     // 消除直接左递归
     this->ExtractDirectRecursion();
+
+    // 化简,消除不可达表达式
+    this->ExtractUnReachableProductions();
+
     nonTerminalArray.clear();
 }
 
@@ -284,7 +287,7 @@ bool Grammar::ExtractDirectRecursion()
             {
                 auto tmp = *expression;
                 expression = ite->second.erase(expression);
-                this->m_production[allocNonTerminal].insert(tmp.erase(0,1) + allocNonTerminal);
+                this->m_production[allocNonTerminal].insert(tmp.erase(0, 1) + allocNonTerminal);
             }
         }
 
@@ -295,23 +298,15 @@ bool Grammar::ExtractDirectRecursion()
         {
             ite->second.insert(express + allocNonTerminal);
         }
-        this->m_production[allocNonTerminal].insert(EMPTY);        
+        this->m_production[allocNonTerminal].insert(EMPTY);
     }
-}
-
-void Grammar::ExtractUnReachableProductions()
-{
-    std::set<std::string> &ofStartProduction = this->m_production[this->m_S];
-    std::set<NonTerminal> ReachChar;
-
-    return;
 }
 
 // 申请新的非终结符,目前最多申请26个(即ABCD...)
 NonTerminal Grammar::AllocNonTerminal()
 {
     NonTerminal termianl = this->m_NextAllocPos;
-    if (!(termianl >= 'A' && termianl <= 'Z'))
+    if (!(termianl >= NON_TERMINAL_BEGIN && termianl <= NON_TERMINAL_END))
     {
         this->m_error = "超过所能分配的非终结符号的最大值\n";
         return -1;
@@ -328,10 +323,78 @@ NonTerminal Grammar::AllocNonTerminal()
         }
 
         termianl = ++this->m_NextAllocPos;
-        if (!(termianl >= 'A' && termianl <= 'Z'))
+        if (!(termianl >= NON_TERMINAL_BEGIN && termianl <= NON_TERMINAL_END))
         {
             this->m_error = "超过所能分配的非终结符号的最大值\n";
             return -1;
         }
     }
 }
+
+// 化简产生式,消除不可达表达式
+// 从文法开始符开始,找出所有可以推导出来的非终结符
+// 使用深度优先算法思路
+void Grammar::ExtractUnReachableProductions()
+{
+    std::set<NonTerminal> reach;
+    // 文法开始符
+    NonTerminal start = this->m_S;
+    // 文法开始符号开始的文法产生式
+    std::set<Prodution> productions = this->m_production[start];
+    size_t oldReachSize = 0;
+
+    this->extractUnReachableProductions(start, reach);
+
+    this->m_nonterminalSet.clear();
+    this->m_nonterminalSet = reach;
+    // 重置分配非终结符号指针
+    this->m_NextAllocPos = NON_TERMINAL_BEGIN;
+}
+
+// 深度算法
+void Grammar::extractUnReachableProductions(NonTerminal ch, std::set<NonTerminal> &reach)
+{
+    std::queue<NonTerminal> nonTerminalQueue;
+    std::set<Prodution> *VnProduction;
+    // ch 符号已经遍历过
+    if (reach.find(ch) != reach.end() || !this->IsNonTerminal(ch))
+    {
+        return;
+    }
+
+    reach.insert(ch);
+    VnProduction = &(this->m_production[ch]);
+
+    // 将ch的产生式中所有的非终结符保存进队列,排除已存在reach的非终结符
+    for (auto production : *VnProduction)
+    {
+        for (auto c : production)
+        {
+            // this->m_production.find(c) != this->m_production.end() 为了防止创建一个新的this->m_production[c]项
+            // && this->m_production.find(c) != this->m_production.end() &&this->m_production[c].size() > 0 // 不可达情况,暂未考虑,假设全部可达
+            // A->BC B->C C不可达,因此这一条理论上应该是不合法的,未考虑这个情况
+            // A->BC B->C C->a 默认都是这种可达的产生式
+            if (this->IsNonTerminal(c) && reach.find(c) == reach.end())
+            {
+                nonTerminalQueue.push(c);
+            }
+        }
+    }
+
+    while (nonTerminalQueue.size() != 0)
+    {
+        this->extractUnReachableProductions(nonTerminalQueue.front(), reach);
+        nonTerminalQueue.pop();
+    }
+}
+
+bool Grammar::IsNonTerminal(NonTerminal ch)
+{
+    return this->m_nonterminalSet.find(ch) != this->m_nonterminalSet.end();
+}
+
+bool Grammar::IsTerminal(Terminal ch)
+{
+    return this->m_termianlSet.find(ch) != this->m_termianlSet.end();
+}
+

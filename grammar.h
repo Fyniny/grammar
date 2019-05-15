@@ -8,6 +8,9 @@
 // ε的输入表现形式
 #define EMPTY "$"
 #define EMPTY_CHAR '$'
+#define NON_TERMINAL_BEGIN 'A'
+#define NON_TERMINAL_END 'Z'
+
 typedef char Terminal;
 typedef char NonTerminal;
 typedef std::string Prodution;
@@ -44,7 +47,19 @@ private:
     bool ExtractDirectRecursion();
     // 化简产生式,消除不可达的表达式
 public:
+    // 化简产生式,消除不可达表达式
     void ExtractUnReachableProductions();
+private:
+    void extractUnReachableProductions(NonTerminal ch, std::set<NonTerminal>& reach);
+
+    // 消除回溯
+public:
+    void ExtractBacktracking();    
+
+    // 求FIRST, FOLLOW
+public:
+    void FIRST();
+    void FOLLOW(std::map<NonTerminal, std::set<Terminal>>& FIRET);
 
 public:
     Grammar()
@@ -52,21 +67,22 @@ public:
         this->m_NextAllocPos = 'A';
         // S→aA，A→BC，B→bB，C→cC，B→ε，C→ε
         // S→aA，A→BC，B→bB，C→cC，A→C，B→b，S→a，A→B，C→c
-        this->m_nonterminalSet.insert('S');
-        this->m_nonterminalSet.insert('A');
-        this->m_nonterminalSet.insert('B');
-        this->m_nonterminalSet.insert('C');
+        // this->m_S = 'S';
+        // this->m_nonterminalSet.insert('S');
+        // this->m_nonterminalSet.insert('A');
+        // this->m_nonterminalSet.insert('B');
+        // this->m_nonterminalSet.insert('C');
 
-        this->m_termianlSet.insert('a');
-        this->m_termianlSet.insert('b');
-        this->m_termianlSet.insert('c');
+        // this->m_termianlSet.insert('a');
+        // this->m_termianlSet.insert('b');
+        // this->m_termianlSet.insert('c');
 
-        this->m_production['S'].insert("aA");
-        this->m_production['A'].insert("BC");
-        this->m_production['B'].insert("bB");
-        this->m_production['C'].insert("cC");
-        this->m_production['B'].insert("$");
-        this->m_production['C'].insert("$");
+        // this->m_production['S'].insert("aA");
+        // this->m_production['A'].insert("BC");
+        // this->m_production['B'].insert("bB");
+        // this->m_production['C'].insert("cC");
+        // this->m_production['B'].insert("$");
+        // this->m_production['C'].insert("$");
 
         // S→aD，S→bB，A→BC，D→AC，B→bB，C→cC，B→ε，C→ε
         // this->m_nonterminalSet.insert('S');
@@ -89,20 +105,21 @@ public:
         // this->m_production['C'].insert("$");
 
         // S→Qc S→c Q→Rb,Q→b,R→Sa,R→a
-        // this->m_termianlSet.insert('a');
-        // this->m_termianlSet.insert('b');
-        // this->m_termianlSet.insert('c');
+        this->m_S = 'S';
+        this->m_termianlSet.insert('a');
+        this->m_termianlSet.insert('b');
+        this->m_termianlSet.insert('c');
 
-        // this->m_nonterminalSet.insert('S');
-        // this->m_nonterminalSet.insert('Q');
-        // this->m_nonterminalSet.insert('R');
+        this->m_nonterminalSet.insert('S');
+        this->m_nonterminalSet.insert('Q');
+        this->m_nonterminalSet.insert('R');
 
-        // this->m_production['S'].insert("Qc");
-        // this->m_production['S'].insert("c");
-        // this->m_production['Q'].insert("Rb");
-        // this->m_production['Q'].insert("b");
-        // this->m_production['R'].insert("Sa");
-        // this->m_production['R'].insert("a");
+        this->m_production['S'].insert("Qc");
+        this->m_production['S'].insert("c");
+        this->m_production['Q'].insert("Rb");
+        this->m_production['Q'].insert("b");
+        this->m_production['R'].insert("Sa");
+        this->m_production['R'].insert("a");
 
         // // S→AC S→B A→a C→c C→BC E→aA E→e
         // this->m_termianlSet.insert('a');
@@ -123,9 +140,9 @@ public:
         // this->m_production["E"].insert("aA");
         // this->m_production["E"].insert("e");
     }
-
-    bool IsTerminal() { return true; }
-    bool IsNonTerminal(NonTerminal ch) { return true; }
+public:
+    bool IsTerminal(Terminal ch);
+    bool IsNonTerminal(NonTerminal ch);
 
 private:
     // 存放错误信息

@@ -1,400 +1,624 @@
 #include "grammar.h"
+#include "character.h"
 #include <set>
-#include <string>
 #include <map>
-#include <vector>
-#include <algorithm>
+#include <iostream>
 #include <queue>
 
-static void extractEmpty(int startPos, NonTerminal Vn, std::string express, std::set<std::string> &expressSet);
+using namespace std;
+static void removeUnReachableProduction(const character& left, const map<character, set<production>>& prodctionMap, const set<character> Vn, set<character>& reach);
 
-// »ñÈ¡¿ÉÒÔÍÆµ¼³ö¦ÅµÄ·ÇÖÕ½á·û¼¯
-// ×¢Òâ: ´Ë²Ù×÷»áÉ¾³ıÔ­À´²úÉúÊ½ÖĞÄÜ¹»Ö±½ÓÍÆµ¼³ö A -> ¦Å
-std::set<NonTerminal> *Grammar::DerivateEmptyExpress()
+
+// æ¶ˆé™¤epsilonäº§ç”Ÿå¼
+// @param productions æ˜¯ä¼ å‡ºå‚æ•° æ˜¯æ¶ˆé™¤epsilonåçš„äº§ç”Ÿå¼é›†åˆï¼Œ keyæ˜¯äº§ç”Ÿå¼çš„å·¦éƒ¨ï¼Œ valueæ˜¯ç›¸åŒå·¦éƒ¨çš„æ‰€æœ‰å³éƒ¨çš„é›†åˆ
+void grammar::RemoveEpsilon(map<character, set<production>>& productions)
 {
-    // ¶¨Òåº¬ÓĞ¿ÉÄÜÍÆµ¼³ö¦ÅµÄ·ÇÖÕ½á·û ¼¯ºÏ
-    std::set<NonTerminal> *derivateEmptyTerminalSet = new std::set<NonTerminal>();
-    size_t oldLen = 0;
-    do
-    {
-        oldLen = derivateEmptyTerminalSet->size();
-        for (auto Vn : this->m_production)
-        {
-            // ÈôVn×ó²¿·ÇÖÕ½á·ûÒÑ¾­ÔÚÖÕ½á·ûºÅÖĞ,Ìø¹ı
-            if (derivateEmptyTerminalSet->find(Vn.first) != derivateEmptyTerminalSet->end())
-            {
-                continue;
-            }
-            for (auto express : Vn.second)
-            {
-                // ´¦Àí A -> ¦Å
-                if (express == EMPTY)
-                {
-                    // ÒÆ³ı A -> ¦Å µÄ²úÉúÊ½
-                    this->m_production[Vn.first].erase(express);
-                    derivateEmptyTerminalSet->insert(Vn.first);
-                    break;
-                }
+    // å¯èƒ½äº§ç”Ÿepsilonäº§ç”Ÿå¼çš„éç»ˆç»“ç¬¦é›†
+    set<character> beta;
 
-                // ´¦Àí A -> BCDEFG...
-                // ÒªÊ¹µÄ A -> ¦Å, Ôò±ØĞëÒªÓĞ B -> ¦Å && C -> ¦Å && D -> ¦Å && ...
-                // ×¢Òâ:: string µü´úÊ± \0 ²»ÔÚµü´ú·¶Î§
-                for (auto c : express)
+    // ä¸åœ¨betaçš„é›†åˆ
+    set<character> nbeta;
+
+    productions = this->P;
+
+    // æŸ¥æ‰¾A->epsilonçš„äº§ç”Ÿå¼
+    for (auto keyProductions : productions)
+    {
+        auto Production = keyProductions.second;
+        for (auto prod : Production)
+        {
+            // åˆ¤æ–­prodäº§ç”Ÿå¼æ˜¯å¦ä¸ºç©ºäº§ç”Ÿå¼
+            // prod -> epsilon
+            if (prod.equal(EpsilonProduction))
+            {
+                // æ’å…¥åˆ° beta é›†åˆ
+                beta.insert(keyProductions.first);
+                // åœ¨åŸé›†åˆä¸­åˆ é™¤ pro->epsilon
+                productions[keyProductions.first].erase(prod);
+                // è‹¥Aåªå­˜åœ¨A->epsilon,åˆ™åœ¨productsä¸­åˆ é™¤Aè®°å½•
+                if(productions[keyProductions.first].empty())
                 {
-                    if (derivateEmptyTerminalSet->find(c) == derivateEmptyTerminalSet->end())
+                    productions.erase(keyProductions.first);
+                }
+                goto inBeta;
+            }
+        }
+
+        nbeta.insert(keyProductions.first);
+        inBeta:
+            continue;
+    } // for (auto keyProductions : productions) çš„ç»“æŸæ‹¬å·
+
+    // æŸ¥æ‰¾A => + epsilon
+    // è¿™ç§æƒ…å†µåªéœ€åœ¨ä¸åœ¨betaé›†åˆä¸­çš„å…ƒç´ ä¸­æŸ¥æ‰¾
+    for (auto key : nbeta)
+    {
+        set<production> Productions = productions[key];
+        // æ£€æŸ¥ä¸åœ¨betaé›†åˆçš„å…ƒç´ çš„æ‰€æœ‰äº§ç”Ÿå¼
+        for (auto prod: Productions)
+        {
+            size_t size = prod.size();
+            for (size_t i = 0; i < size; i++)
+            {
+                const character* ch = prod.getIndexCharacter(i);
+                // è·å–ä¸åˆ°ä¸‹è¡¨
+                if(ch == nullptr)
+                {
+                    cout << "look for A => +epsilon error:: \"key = ' " << key << " ' production = '" << prod << "' index = ' " << i << "' \" and when call producion.getIndexCharacter() return nullptr" << endl;
+                    exit(1);
+                }
+                // æ£€æŸ¥äº§ç”Ÿå¼(prod)ä¸­çš„å€¼åœ¨ä¸åœ¨betaé›†åˆä¸­ï¼Œè‹¥ä¸åœ¨ï¼Œä¸å¯èƒ½æ¨å‡º epsilon äº§ç”Ÿå¼ï¼Œè·³è¿‡è¯¥äº§ç”Ÿå¼ä½™ä¸‹æŸ¥æ‰¾
+                if(beta.find(*ch) != beta.end())
+                {
+                    continue;
+                }
+                else
+                {
+                    goto nextProduction;
+                }
+                
+            }
+
+            // è‹¥ç»è¿‡è¿™é‡Œè¯´æ˜æ»¡è¶³äº†æ¡ä»¶
+            beta.insert(key);
+            nbeta.erase(key);
+
+        nextProduction:
+            continue;
+        }
+        
+    } // for (auto key : nbeta)
+
+    // è¾…åŠ©é˜Ÿåˆ—
+    queue<production> qProduction;
+    // æ‹·è´çš„äº§ç”Ÿå¼é›†ï¼Œç”¨äºéš”ç¦»åœ¨åŸäº§ç”Ÿå¼é›†ä¸­æ’å…¥æ–°è§„åˆ™åå‡ºç°å‡ºç°é‡å¤è¿­ä»£
+    set<production> hproduction;
+    // æ·»åŠ çš„äº§ç”Ÿå¼è§„åˆ™çš„ä¸­é—´è¿‡ç¨‹ï¼Œå¯å¤ç”¨
+    production hprod;
+
+    // å¯¹äºA => + epsilon çš„äº§ç”Ÿå¼æ·»åŠ è§„åˆ™
+    // A -> Bc B -> epsilon æ·»åŠ  A -> c
+    for (auto KeyProd = productions.begin(); KeyProd != productions.end(); KeyProd++)
+    {
+        // åˆå§‹åŒ–è¾…åŠ©é˜Ÿåˆ—
+        while(qProduction.size() != 0)
+        {
+            qProduction.pop();
+        }
+
+        hproduction = KeyProd->second;
+        KeyProd->second.clear();
+
+        // å¤„ç†ä¸€æ¡äº§ç”Ÿå¼
+        for (auto prod = hproduction.begin(); prod != hproduction.end(); prod++)
+        {
+            qProduction.push(*prod);
+            while(!qProduction.empty())
+            {
+                auto tmp = qProduction.front();
+                for(size_t i = 0; i < tmp.size(); i++)
+                {
+                    const character* ch = tmp.getIndexCharacter(i);
+                    // åœ¨betaé›†ä¸­æŸ¥æ‰¾chï¼Œè‹¥æŸ¥æ‰¾æˆåŠŸï¼Œåˆ™éœ€è¦æ·»åŠ è§„åˆ™
+                    // å› ä¸ºæ–°æ·»åŠ çš„è§„åˆ™åœ¨æŸ¥æ‰¾ä½ç½®ä¹‹åçš„ä½ç½®æ²¡æœ‰è¿›è¡ŒæŸ¥æ‰¾ï¼Œæ•…éœ€è¦æ·»åŠ è¿›è¾…åŠ©é˜Ÿåˆ—qProductionä¸­ï¼Œç­‰å¾…æ£€æŸ¥
+                    // æ·»åŠ è§„åˆ™æ˜¯ä¸€ä¸ªè¿­ä»£çš„è¿‡ç¨‹
+                    if(beta.find(*ch) != beta.end())
                     {
-                        // A -> ¦Å ²»´æÔÚÊ±,Ìø¹ıÇ°Ãæ²åÈëÓï¾ä
-                        goto next;
+                        hprod.clear();
+                        tmp.copy(i, hprod);
+                        qProduction.push(hprod);
                     }
                 }
-
-                derivateEmptyTerminalSet->insert(Vn.first);
-                break;
-            // A -> ¦Å ²»´æÔÚÊ±,Ìø¹ıÇ°Ãæ²åÈëÓï¾ä
-            next:
-                continue;
-            }
-        }
-    } while (oldLen != derivateEmptyTerminalSet->size());
-
-    return derivateEmptyTerminalSet;
-}
-
-// ÎÄ·¨²úÉúÊ½---Ïû³ı¦Å±í´ïÊ½
-Grammar &Grammar::RemoveEmptyExpression()
-{
-    auto derivateEmptyTerminalSet = this->DerivateEmptyExpress();
-    // ÓÃÓÚÔİÊ±´æ´¢ĞŞ¸ÄµÄVnSet
-    char tmp = '#';
-    // ÓÃÓÚ¶ÔÎÄ·¨½øĞĞÌæ»»µÄÁÙÊ±Á´±í
-    std::set<std::string> tmpExpresses;
-    // ÓÃÓÚ¼ÇÂ¼µü´úÇ°¸÷¸ö·ÇÖÕ½á·ûµÄ²úÉúÊ½µÄ¸öÊı
-    std::map<NonTerminal, size_t> total;
-    // ¼ÇÂ¼VnsetÔÚ±í´ïÊ½ÖĞµÄË÷ÒıÖµ
-    size_t pos = 0;
-    // ±éÀú´æÔÚ²úÉúÊ½Îª ¦Å µÄ¼¯ºÏ
-    // Ìæ»»:
-    // A -> ¦Å
-    // S -> Ab
-    // S -> Ab | b
-    for (auto VnSet : *derivateEmptyTerminalSet)
-    {
-        // ±éÀúËùÓĞµÄ²úÉúÊ½
-        for (auto ite_production = this->m_production.begin(); ite_production != this->m_production.end(); ite_production++)
-        {
-            // ÔÚÒ»¸öĞÂµÄVn¿ªÊ¼Ç°Çå¿ÕÁÙÊ±¼¯ºÏ
-            tmpExpresses.clear();
-            // ¶ÔÃ¿Ò»Ìõ²úÉúÊ½½øĞĞ´¦Àí,È¥³ıÊ±ÓÃ tmp ×Ö·û´úÌæ VnSet×Ö·û,²¢±£´æ½ø expressesÁ´±í
-            // Ìæ´ú½áÊøÖ®ºó±éÀúÁ´±í²¢½« tmp ×Ö·û »¹Ô­Îª VnSet ×Ö·û±£´æ½ø this->m_production ²úÉúÊ½ÖĞ
-            for (auto ite_express = ite_production->second.begin(); ite_express != ite_production->second.end(); ite_express++)
-            {
-                extractEmpty(0, VnSet, *ite_express, tmpExpresses);
-            }
-            for (auto expr : tmpExpresses)
-            {
-                ite_production->second.insert(expr);
+                KeyProd->second.insert(tmp);
+                qProduction.pop();
             }
         }
     }
+ }
 
-    delete derivateEmptyTerminalSet;
+// åŒ–é—´æ¥å·¦é€’å½’ä¸ºç›´æ¥å·¦é€’å½’
+// è¦æ±‚äº§ç”Ÿå¼æ— epsilonäº§ç”Ÿå¼ æ— å›è·¯(A->A)
+// è‹¥å‡ºç°ä¸Šè¯‰æƒ…å†µå°†å¯¼è‡´ç»“æœä¸å‡†ç¡®
+// æ­¤æ“ä½œä¸ä¼šäº§ç”Ÿæ–°çš„éç»ˆç»“ç¬¦
+ void grammar::IndirectRecursiveToDirectRecursive(set<character>& Vn, map<character, set<production>>& productions)
+ {
+    // æ’åˆ—Vn 
+    vector<character> vVn;
+    // éç»ˆç»“ç¬¦çš„ä¸ªæ•°
+    size_t size = 0;
+    // å»é™¤äº§ç”Ÿå¼å·¦è¾¹ç¬¬ä¸€ä¸ªéç»ˆç»“ç¬¦åå‰©ä¸‹çš„äº§ç”Ÿå¼ï¼Œç”¨äºæ‹¼æ¥æˆæ–°çš„äº§ç”Ÿå¼
+    production extractFisrt;
+    // æ‹¼æ¥æˆçš„æ–°çš„äº§ç”Ÿå¼çš„ä¸´æ—¶å­˜æ”¾ç‚¹
+    set<production> mergeProduction;
+
+    for (auto v : Vn)
+    {
+        vVn.push_back(v);
+    }
+    size = vVn.size();
+
+    for (auto i = 0; i < size; i++)
+    {
+        for (auto j = 0; j < i; j++)
+        {
+            auto& prods = productions[vVn[i]];
+            // æ¯æ¬¡è¿›è¡Œæ–°ä¸€è½®çš„éå†å¼éƒ½éœ€è¦æ¸…ç†ä¸€ä¸‹ä¸Šä¸€æ¬¡ç”Ÿæˆçš„äº§ç”Ÿå¼é›†åˆé¿å…æ··æ‚
+            mergeProduction.clear();
+            // éå†ç›¸åŒå·¦éƒ¨çš„æ¯ä¸€æ¡äº§ç”Ÿå¼
+            for (auto prod : prods)
+            {
+                // äº§ç”Ÿå¼æœ€å·¦ç¬¦å·ä¸ vVn[j]ç›¸ç­‰ï¼Œéœ€è¦è¿›è¡Œæ”¹å†™
+                if(prod.getIndexCharacter(0)->equal(vVn[j]))
+                {
+                    prod.copy(0, extractFisrt);
+                    auto& vVnjProds = productions[vVn[j]];
+                    for(auto jProd : vVnjProds)
+                    {
+                        // æ·»åŠ åœ¨ä¸´æ—¶çš„å­˜æ”¾ä½ç½®æ˜¯ä¸ºäº†å‡å°‘æ²¡å¿…è¦çš„éå†æ¬¡æ•°
+                        mergeProduction.insert(jProd + extractFisrt);
+                    }
+                    //åˆ é™¤
+                    prods.erase(prod);
+                }
+            }
+            prods.insert(mergeProduction.begin(), mergeProduction.end());
+        }
+    }
 }
 
-// µİ¹é´¦Àíº¬ÓĞ Vn -> ¦Å µÄ±í´ïÊ½
-// Àı×Ó:
-// A -> ¦Å, S -> AcAdA É¨Ãè¹ıµÄA ÓÃ # ´úÌæ
-// AcAdA----
-//          |----#cAdA
-//          |           |---- #c#dA
-//          |           |           |---- #c#d#
-//          |           |           |---- #c#d
-//          |           |---- #cdA
-//          |                       |---- #cd#
-//          |                       |---- #cd
-//          |----cAdA
-//                      |---- c#dA
-//                      |           |---- c#d#
-//                      |           |---- c#d
-//                      |---- cdA
-//                                  |---- cd#
-//                                  |---- cd
-//
-static void extractEmpty(int startPos, NonTerminal Vn, std::string express, std::set<std::string> &expressSet)
+// æ¶ˆé™¤å›æº¯
+// è¿™æ˜¯ä¸€ä¸ªå†…éƒ¨å¤„ç†å‡½æ•°ï¼Œè°ƒç”¨ç€åº”è¯¥è°ƒç”¨RemoveBacktrack()
+// @param originLeft æ˜¯äº§ç”Ÿå¼çš„å·¦éƒ¨
+// @param ptrProductions æ˜¯æ‰€æœ‰ç›¸åŒå·¦éƒ¨çš„äº§ç”Ÿå¼çš„å³éƒ¨é›†åˆ
+// @param productionMap äº§ç”Ÿå¼çš„æ˜ å°„å…³ç³»è¡¨
+void grammar::removeBacktrack(const character* originLeft, std::set<production> *ptrProductions, std::map<character, std::set<production>>* const productionMap)
 {
-    size_t pos = -1;
-    // µİ¹é³ö¿Ú,²é²»µ½¼ÇÂ¼
-    if (-1 == (pos = express.find(Vn, startPos)))
+    // åˆ†ç±»æ¡¶ï¼Œç”¨æ¥æ”¶é›†ç›¸åŒå‰ç¼€çš„äº§ç”Ÿå¼ï¼Œå¹¶åœ¨ä¹‹åè¿›è¡Œå†åˆ†ç±»
+    map<character, set<production>> bucket;
+    // æ–°æ³¨å†Œçš„éç»ˆç»“ç¬¦
+    character ch;
+    // ç”¨äºå­˜æ”¾æŠ½å‡ºç›¸åŒå‰ç¼€ä¹‹åï¼Œå‰©ä½™äº§ç”Ÿå¼ä¸å¿…è¿›å…¥ä¸‹ä¸€è½®åˆ†ç±»åˆ†æçš„å¼å­
+    set<production> tmpProduction;
+    production tmp;
+
+    if(ptrProductions->size() <= 1)
     {
         return;
     }
-    // ´¦ÀíÃ»ÓĞÈ¥³ıVnµÄ±í´ïÊ½
-    // pos+1 ±íÊ¾´ÓVnµÄÏÂÒ»¸ö¿ªÊ¼,ÒòÎªÕâ¸öË÷ÒıÎªposµÄVnÒÑ¾­×ö¹ı´¦Àí,Òò¶øĞèÒªºöÂÔ¸ÃÖµ
-    extractEmpty(pos + 1, Vn, express, expressSet);
-    express.erase(pos, 1);
-    // ÅÅ³ı¿Õ´®
-    // Èô²úÉúÊ½Îª S -> Vn
-    //  Ôò Ó¦¸Ã²úÉúµÄÖ»ÓĞ S -> Vn
-    if (0 != express.size())
-    {
-        expressSet.insert(express);
-        // ´¦ÀíÈ¥µôVnµÄ±í´ïÊ½
-        // pos ²»¼Ó1, ÒòÎªVnÒÑ¾­±»È¥µôÁË
-        extractEmpty(pos, Vn, express, expressSet);
-    }
-}
 
-// Ïû³ı×óµİ¹é,ÒªÇóËùÓĞ²úÉúÊ½ÖĞ²»´æÔÚÄÜ¹»ÍÆµ¼³ö ¦Å µÄÊ½×Ó
-void Grammar::ExtractLeftRecursion()
-{
-    // ´æ´¢¸ø¶¨Ë³ĞòµÄÖØÅÅµÄ·ÇÖÕ½á·ûºÅ
-    std::vector<NonTerminal> nonTerminalArray;
-    // ¼ÇÂ¼·ÇÖÕ½á·û¸öÊı
-    size_t size = this->m_nonterminalSet.size();
-    // ´æ·ÅĞèÒªÉ¾³ıµÄ²úÉúÊ½
-    std::set<std::string> deletedProductions;
-    // ´æ·ÅĞèÒª²åÈëµÄ²úÉúÊ½
-    std::set<std::string> insertedProductions;
-
-    // ÅÅÁĞ·ÇÖÕ½á·û
-    for (NonTerminal ch : this->m_nonterminalSet)
+    // å°†äº§ç”Ÿå¼æ ¹æ®å‰ç¼€è¿›è¡Œåˆ†æ¡¶åŒ…è£…
+    for(auto prod = ptrProductions->begin(); prod != ptrProductions->end(); prod++)
     {
-        nonTerminalArray.push_back(ch);
-    }
+        auto first = prod->getIndexCharacter(0);
 
-    // ½«¼ä½Ó×óµİ¹é×ªÎªÖ±½Ó×óµİ¹é(ÈôÓĞ)
-    for (size_t i = 0; i < size; i++)
-    {
-        auto &productionSet = this->m_production[nonTerminalArray[i]];
-        // È¡Ò»Ìõ²úÉúÊ½
-        for (auto production = productionSet.begin(); production != productionSet.end(); production++)
+        // äº§ç”Ÿæ—¶ä¸­å¾—ä¸åˆ°å‰ç¼€æ‰€ä»¥äº§ç”Ÿå¼å·²ç»åˆ†å®Œï¼Œæ·»åŠ Epsilonäº§ç”Ÿå¼
+        if(first == nullptr)
         {
-            // Aj
-            for (size_t j = 0; j < i; j++)
-            {
-                // Ìæ»»
-                auto subNonTerminalArray = std::vector<NonTerminal>(nonTerminalArray.begin(), nonTerminalArray.begin() + i);
-                this->indirectRecursionToDirect(*production, nonTerminalArray[i], subNonTerminalArray, deletedProductions, insertedProductions);
-            }
-        }
-
-        if (deletedProductions.size() != 0)
-        {
-            for (auto del : deletedProductions)
-            {
-                productionSet.erase(del);
-            }
-        }
-
-        if (insertedProductions.size() != 0)
-        {
-            for (auto ins : insertedProductions)
-            {
-                productionSet.insert(ins);
-            }
-        }
-
-        deletedProductions.clear();
-        insertedProductions.clear();
-    }
-
-    // Ïû³ıÖ±½Ó×óµİ¹é
-    this->ExtractDirectRecursion();
-
-    // »¯¼ò,Ïû³ı²»¿É´ï±í´ïÊ½
-    this->ExtractUnReachableProductions();
-
-    nonTerminalArray.clear();
-}
-
-// ×ª»¯¼ä½Ó×óµİ¹éÎªÖ±½Ó×óµİ¹é(ÈôÓĞ)
-void Grammar::indirectRecursionToDirect(std::string express, NonTerminal Vn, std::vector<NonTerminal> &VnSet, std::set<std::string> &deletedProductions, std::set<std::string> &insertedProductions)
-{
-    NonTerminal ch = express[0];
-
-    if (!this->IsNonTerminal(ch) || VnSet.end() == std::find(VnSet.begin(), VnSet.end(), ch))
-    {
-        // Vn -> ch
-        // ch ²»ÔÚ Vn ÖĞ, ÎŞĞèÍÆµ¼
-        if (Vn != EMPTY_CHAR)
-        {
-            return;
-        }
-        insertedProductions.insert(express);
-        return;
-    }
-
-    auto &productions = this->m_production[ch];
-    for (auto pro : productions)
-    {
-        auto ss = (pro + express.substr(1)).c_str();
-        this->indirectRecursionToDirect(pro + express.substr(1), EMPTY_CHAR, VnSet, deletedProductions, insertedProductions);
-    }
-
-    if (Vn != EMPTY_CHAR)
-    {
-        deletedProductions.insert(express);
-        return;
-    }
-}
-
-// Ïû³ıÖ±½Ó×óµİ¹é
-bool Grammar::ExtractDirectRecursion()
-{
-    NonTerminal allocNonTerminal = -1;
-    NonTerminal Vn;
-    bool hasLeftRecrusion = false;
-    // ³ıÈ¥º¬ÓĞ×óµİ¹éÖ®ºóµÄ²úÉúÊ½µÄ¼¯ºÏµÄ¸±±¾
-    std::set<Prodution> tmpProduction;
-
-    for (auto ite = this->m_production.begin(); ite != this->m_production.end(); ite++)
-    {
-        Vn = ite->first;
-        allocNonTerminal = -1;
-        hasLeftRecrusion = false;
-        tmpProduction.clear();
-
-        // ÅĞ¶ÏÊÇ·ñ´æÔÚ×óµİ¹é
-        for (auto expression : ite->second)
-        {
-            if (expression[0] == Vn)
-            {
-                hasLeftRecrusion = true;
-                break;
-            }
-        }
-
-        if (!hasLeftRecrusion)
-        {
+            tmpProduction.insert(EpsilonProduction);
             continue;
         }
 
-        // ³¢ÊÔ·ÖÅäĞÂµÄ·ÇÖÕ½á·û
-        if ((allocNonTerminal = this->AllocNonTerminal()) == -1)
-        {
-            return false;
-        }
-
-        // Ïû³ıµİ¹é
-        // A -> Ab | a     ----------- 1
-        // A -> abB        ----------- 2
-        // B -> bB | ¦Å     ----------- 3
-
-        // ½«×óµİ¹é²¿·Ö´ÓproductionSetÖĞÉ¾³ı,²¢¸Ä³ÉÓĞµİ¹éµÄĞÎÊ½¼ÓÈëallocNonTermianl¼¯ºÏ
-        // µÚ3²½ÊµÏÖ
-        for (auto expression = ite->second.begin(); expression != ite->second.end(); expression++)
-        {
-            if ((*expression)[0] == Vn)
-            {
-                auto tmp = *expression;
-                expression = ite->second.erase(expression);
-                this->m_production[allocNonTerminal].insert(tmp.erase(0, 1) + allocNonTerminal);
-            }
-        }
-
-        // µÚ2²½ÊµÏÖ
-        tmpProduction = ite->second;
-        ite->second.clear();
-        for (auto express : tmpProduction)
-        {
-            ite->second.insert(express + allocNonTerminal);
-        }
-        this->m_production[allocNonTerminal].insert(EMPTY);
-    }
-}
-
-// ÉêÇëĞÂµÄ·ÇÖÕ½á·û,Ä¿Ç°×î¶àÉêÇë26¸ö(¼´ABCD...)
-NonTerminal Grammar::AllocNonTerminal()
-{
-    NonTerminal termianl = this->m_NextAllocPos;
-    if (!(termianl >= NON_TERMINAL_BEGIN && termianl <= NON_TERMINAL_END))
-    {
-        this->m_error = "³¬¹ıËùÄÜ·ÖÅäµÄ·ÇÖÕ½á·ûºÅµÄ×î´óÖµ\n";
-        return -1;
+        bucket[*first].insert(prod->copy(0, tmp));
     }
 
-    while (true)
-    {
-        // ÒÑµÇ¼ÇµÄ·ÇÖÕ½á·û±íÖĞ²»´æÔÚÊ±,Ôò¿ÉÒÔ·ÖÅä
-        if (this->m_nonterminalSet.find(termianl) == this->m_nonterminalSet.end())
-        {
-            this->m_NextAllocPos++;
-            this->m_nonterminalSet.insert(termianl);
-            return termianl;
-        }
-
-        termianl = ++this->m_NextAllocPos;
-        if (!(termianl >= NON_TERMINAL_BEGIN && termianl <= NON_TERMINAL_END))
-        {
-            this->m_error = "³¬¹ıËùÄÜ·ÖÅäµÄ·ÇÖÕ½á·ûºÅµÄ×î´óÖµ\n";
-            return -1;
-        }
-    }
-}
-
-// »¯¼ò²úÉúÊ½,Ïû³ı²»¿É´ï±í´ïÊ½
-// ´ÓÎÄ·¨¿ªÊ¼·û¿ªÊ¼,ÕÒ³öËùÓĞ¿ÉÒÔÍÆµ¼³öÀ´µÄ·ÇÖÕ½á·û
-// Ê¹ÓÃÉî¶ÈÓÅÏÈËã·¨Ë¼Â·
-void Grammar::ExtractUnReachableProductions()
-{
-    std::set<NonTerminal> reach;
-    // ÎÄ·¨¿ªÊ¼·û
-    NonTerminal start = this->m_S;
-    // ÎÄ·¨¿ªÊ¼·ûºÅ¿ªÊ¼µÄÎÄ·¨²úÉúÊ½
-    std::set<Prodution> productions = this->m_production[start];
-    size_t oldReachSize = 0;
-
-    this->extractUnReachableProductions(start, reach);
-
-    this->m_nonterminalSet.clear();
-    this->m_nonterminalSet = reach;
-    // ÖØÖÃ·ÖÅä·ÇÖÕ½á·ûºÅÖ¸Õë
-    this->m_NextAllocPos = NON_TERMINAL_BEGIN;
-}
-
-// Éî¶ÈËã·¨
-void Grammar::extractUnReachableProductions(NonTerminal ch, std::set<NonTerminal> &reach)
-{
-    std::queue<NonTerminal> nonTerminalQueue;
-    std::set<Prodution> *VnProduction;
-    // ch ·ûºÅÒÑ¾­±éÀú¹ı
-    if (reach.find(ch) != reach.end() || !this->IsNonTerminal(ch))
+    // è‹¥åˆ†ç±»åæ¡¶çš„å¤§å°å’Œæ²¡åˆ†ä¸€è‡´è¯´æ˜åŸäº§ç”Ÿå¼æ­£äº¤ï¼Œæ— éœ€å†åˆ†
+    if(ptrProductions->size() == bucket.size())
     {
         return;
     }
 
-    reach.insert(ch);
-    VnProduction = &(this->m_production[ch]);
+    // å°†åŸæ¥äº§ç”Ÿå¼æ¸…ç©º
+    ptrProductions->clear();
+    ptrProductions->insert(tmpProduction.begin(), tmpProduction.end());
 
-    // ½«chµÄ²úÉúÊ½ÖĞËùÓĞµÄ·ÇÖÕ½á·û±£´æ½ø¶ÓÁĞ,ÅÅ³ıÒÑ´æÔÚreachµÄ·ÇÖÕ½á·û
-    for (auto production : *VnProduction)
+    // é‡ç½®tmp
+    tmp.clear();
+
+    for(auto KeyProd = bucket.begin(); KeyProd != bucket.end(); KeyProd++)
     {
-        for (auto c : production)
+        if(KeyProd->second.size() == 1)
         {
-            // this->m_production.find(c) != this->m_production.end() ÎªÁË·ÀÖ¹´´½¨Ò»¸öĞÂµÄthis->m_production[c]Ïî
-            // && this->m_production.find(c) != this->m_production.end() &&this->m_production[c].size() > 0 // ²»¿É´ïÇé¿ö,ÔİÎ´¿¼ÂÇ,¼ÙÉèÈ«²¿¿É´ï
-            // A->BC B->C C²»¿É´ï,Òò´ËÕâÒ»ÌõÀíÂÛÉÏÓ¦¸ÃÊÇ²»ºÏ·¨µÄ,Î´¿¼ÂÇÕâ¸öÇé¿ö
-            // A->BC B->C C->a Ä¬ÈÏ¶¼ÊÇÕâÖÖ¿É´ïµÄ²úÉúÊ½
-            if (this->IsNonTerminal(c) && reach.find(c) == reach.end())
+            ptrProductions->insert(production(KeyProd->first, *originLeft).append(*KeyProd->second.begin()));
+            continue;
+        }
+        this->AllocVn(*originLeft, ch);
+
+
+        removeBacktrack(&ch, &(KeyProd->second), productionMap);
+        // è‹¥ A -> Ab | Abc | Abd 
+        // åˆ™æ ¹æ®ä»¥ä¸Šè§„åˆ™åº”è¯¥æå–æˆï¼š
+        // A -> AA'    A'-> bA''    A'' -> epsilon | c | d
+        // A'' æ˜¯å¤šä½™çš„ï¼Œä¸‹é¢é€»è¾‘å°†ç”¨äºåˆå¹¶è¿™ç§æƒ…å†µ
+        // åˆå¹¶ä¸º A -> AbA' A' -> epsilon | c | d
+        // ä»¥ä¸Šåˆ†æå¯çŸ¥å½“äº§ç”Ÿå¼å¤§å°ä¸º1æ—¶æ°ä¸ºè¿™ç§æƒ…å†µ
+        if(KeyProd->second.size() == 1)
+        {
+            size_t size = KeyProd->second.begin()->size();
+            // æŠŠAæ·»åŠ è¿›tmp
+            tmp.append(KeyProd->first);
+            // ä¸ºä¿å®ˆèµ·è§ä½¿ç”¨å¾ªç¯
+            for(size_t i = 0; i < size - 1; i++)
             {
-                nonTerminalQueue.push(c);
+                // second ä¸­çš„å¼å­åº”ä¸º bA''ï¼Œæå–å‡º b
+                auto childleft = KeyProd->second.begin()->getIndexCharacter(i);
+                // æ·»åŠ  b
+                tmp.append(*childleft);
+            }
+
+            ptrProductions->insert(tmp.append(ch));
+            // æ›¿æ¢ A'' ä¸º A'
+            auto nextCh = KeyProd->second.begin()->getIndexCharacter(size-1);
+            (*productionMap)[ch] = (*productionMap)[*nextCh];
+            (*productionMap).erase(*nextCh);
+            // é‡Šæ”¾A''
+            this->ReleaseVn(*nextCh);
+            continue;
+        }
+
+        // å°†æ¶ˆé™¤å›æº¯æŠ˜åçš„äº§ç”Ÿå¼æ·»åŠ å›åŸæ¥çš„äº§ç”Ÿå¼é›†
+        ptrProductions->insert(production(KeyProd->first, *originLeft).append(ch));
+        // åœ¨æ–°ç”³è¯·çš„éç»ˆæç¬¦çš„äº§ç”Ÿå¼é›†æ³¨å†Œè¿›äº§ç”Ÿå¼é›†
+        (*productionMap)[ch] = KeyProd->second;
+    }
+    
+}
+
+// æ¶ˆé™¤å›æº¯
+// @param productionMap å¾…å¤„ç†çš„äº§ç”Ÿå¼é›†ï¼Œå¹¶ä½œä¸ºç»“æœè¿”å›ï¼Œæ˜¯ä¸€ä¸ªä¼ å‡ºå‚æ•°
+void grammar::RemoveBacktrack(std::map<character, std::set<production>> *productionMap)
+{
+    std::map<character, std::set<production>> productions = *productionMap;
+    for(auto production : productions)
+    {
+        removeBacktrack(&production.first, &(*productionMap)[production.first], productionMap);
+    }
+}
+
+// æ¶ˆé™¤ç›´æ¥å·¦é€’å½’
+// @param productionMap å¾…å¤„ç†çš„äº§ç”Ÿå¼é›†ï¼Œå¹¶ä½œä¸ºç»“æœè¿”å›ï¼Œæ˜¯ä¸€ä¸ªä¼ å‡ºå‚æ•°
+// @returns è‹¥æˆåŠŸå¤„ç†å·¦é€’å½’åˆ™è¿”å›true,å¦åˆ™åº”è¯¥ä½¿ç”¨å°šæœªæ¶ˆé™¤ç©ºäº§ç”Ÿå¼çš„productionsäº§ç”Ÿå¼é›†è¿›è¡Œåç»­æ“ä½œ
+bool grammar::RemoveRecursive(std::map<character, std::set<production>> *productionMap)
+{
+    set<production> tmp;
+    std::map<character, std::set<production>> newProductionMap;
+    character ch = Epsilon;
+    production extractFirst;
+
+    for(auto KeyProd = productionMap->begin(); KeyProd != productionMap->end(); KeyProd++)
+    {
+        const character& key = KeyProd->first;
+        for(auto prod = KeyProd->second.begin(); prod != KeyProd->second.end(); )
+        {
+            if(prod->getIndexCharacter(0)->equal(key))
+            {
+                // å›è·¯
+                if(prod->size() == 1)
+                {
+                    cout << "production exists loop: \' " << key << "-> " << *prod << "' \n";
+                    exit(1);
+                }
+                // ch ä¸ºæ–°çš„äº§ç”Ÿå¼å·¦éƒ¨
+                // å¯¹äºç›¸åŒå·¦éƒ¨çš„å¤šä¸ªå«æœ‰å·¦é€’å½’çš„äº§ç”Ÿå¼æ¶ˆé™¤æ—¶åªéœ€è¦å¼•å…¥ä¸€ä¸ªæ–°çš„éç»ˆç»“ç¬¦
+                if(ch.equal(Epsilon))
+                {
+                    // ç”³è¯·æ–°çš„éç»ˆç»“ç¬¦
+                    this->AllocVn(key, ch);
+                }
+                tmp.insert(prod->copy(0, extractFirst).append(ch));
+                prod = KeyProd->second.erase(prod);
+                continue;
+            }
+            prod++;
+        }
+
+        // chä¸ä¸ºç©ºä¸²è¯´æ˜æ¶ˆé™¤äº†å·¦é€’å½’,éœ€è¦æ’å…¥æ–°åŠ å…¥çš„è§„åˆ™
+        if(!ch.equal(Epsilon))
+        {
+            if(KeyProd->second.size() == 0)
+            {
+                KeyProd->second.insert(production(ch, key));
+            } 
+            else
+            {
+                auto prod = KeyProd->second;
+                KeyProd->second.clear();
+                for(auto p : prod)
+                {
+                    KeyProd->second.insert(p.append(ch));
+                }
+            }
+            tmp.insert(EpsilonProduction);
+            newProductionMap[ch] = tmp;
+        }
+        tmp.clear();
+        ch = Epsilon;
+    } // for(auto KeyProd = productionMap->begin(); KeyProd != productionMap->end(); KeyProd++)
+
+    if (newProductionMap.empty())
+    {
+        return false;
+    }
+
+    productionMap->insert(newProductionMap.begin(), newProductionMap.end());
+    return true;
+}
+
+// ç”³è¯·æ–°çš„éç»ˆç»“ç¬¦å·
+bool grammar::AllocVn(const character src, character& ch)
+{
+    ch = src;
+    while(this->Vn.find(ch.append("'")) != this->Vn.end());
+    this->Vn.insert(ch);
+    return true;
+}
+
+// é‡Šæ”¾éç»ˆç»“ç¬¦å·
+void grammar::ReleaseVn(const character& vn)
+{
+    this->Vn.erase(vn);
+}
+
+// è¯­æ³•åˆ†æ
+// 1. æ¶ˆé™¤ç©ºäº§ç”Ÿå¼
+// 2. æ¶ˆé™¤é€’å½’
+// 3. æ¶ˆé™¤å›æº¯
+void grammar::AnalyzeGrammar()
+{
+    auto Vn = this->Vn;
+    bool error = false;
+    map<character, set<production>> productions;
+    // æ£€æŸ¥ç»ˆç»“ç¬¦é›†å’Œéç»ˆç»“ç¬¦é›†æ˜¯å¦æ­£äº¤
+    for (auto vt : this->Vt)
+    {
+        if(Vn.insert(vt).second){
+            continue;
+        }
+        cout << "[error] keyword repeat:: \"" << vt << "\"\n";
+        error = true;
+    }
+
+    if(error)
+    {
+        return;
+    }
+
+    this->print(cout << "æœ€åˆçš„äº§ç”Ÿå¼ï¼š\n");
+    // æ¶ˆé™¤ç©ºäº§ç”Ÿå¼
+    this->RemoveEpsilon(productions);
+    this->print(cout << "æ¶ˆé™¤ç©ºäº§ç”Ÿå¼ï¼š\n", &productions);
+    // è½¬åŒ–é—´æ¥å·¦é€’å½’
+    this->IndirectRecursiveToDirectRecursive(this->Vn, productions);
+    this->print(cout << "è½¬åŒ–é—´æ¥å·¦é€’å½’ï¼š\n", &productions);
+    // æ¶ˆé™¤å·¦é€’å½’
+    // è‹¥æˆåŠŸæ›¿ä»£grammarä¸­åŸå…ˆçš„äº§ç”Ÿå¼é›†
+    if(this->RemoveRecursive(&productions))
+    {
+        cout << "[ä¸å­˜åœ¨å·¦é€’å½’]\n";
+        this->P = productions;
+    }
+    this->print(cout << "æ¶ˆé™¤å·¦é€’å½’ï¼š\n");
+    // æ¶ˆé™¤å›æº¯
+    this->RemoveBacktrack(&this->P);
+    this->print(cout << "æ¶ˆé™¤å›æº¯ï¼š\n");
+    // æ¶ˆé™¤ä¸å¯è¾¾
+    this->RemoveUnReachableProduction();
+    this->print(cout << "æ¶ˆé™¤ä¸å¯è¾¾:\n");
+    // å»é‡
+    this->MergeRepeatProduction();   
+    this->print(cout << "æ¶ˆé™¤é‡å¤ï¼š\n");
+}
+
+// åˆå¹¶é‡å¤çš„æ— æ„ä¹‰çš„è¡¨è¾¾å¼
+// A -> Ac  D -> Dc åˆ™åˆå¹¶ä¸º A -> Ac
+void grammar::MergeRepeatProduction()
+{
+    bool canReplace = false;
+    map<character, character> srcDes;
+    // å°†äº§ç”Ÿå¼ä¸ªæ•°ç›¸åŒçš„åˆ†ä¸ºä¸€ç±»
+    map<int, map<character, set<production>>> sortedProdtions;
+    for (auto keyProd : this->P)
+    {
+        sortedProdtions[keyProd.second.size()][keyProd.first] = keyProd.second;
+    }
+
+    for(auto sizeKeyProd : sortedProdtions)
+    {
+        // å«æœ‰ç›¸åŒäº§ç”Ÿå¼çš„ä¸åŒå·¦éƒ¨çš„ç»„å°äº1æ—¶æ— éœ€åˆå¹¶
+        if(sizeKeyProd.second.size() <= 1)
+        {
+            continue;
+        }
+    
+        for(auto keyProd = sizeKeyProd.second.begin(); keyProd != sizeKeyProd.second.end(); keyProd++)
+        {
+            // åœ¨æ›¿æ¢åå•ä¸­çš„ç¬¦å·æ— éœ€éå†
+            if(srcDes.find(keyProd->first) != srcDes.end())
+            {
+                continue;
+            }
+
+            auto keyProd1 = keyProd;
+            for(keyProd1++; keyProd1 != sizeKeyProd.second.end(); keyProd1++)
+            {
+                for(auto p : keyProd1->second)
+                {
+                    for(auto i = 0;i < p.size(); i++)
+                    {
+                        if(p.getIndexCharacter(i)->equal(keyProd1->first))
+                        {
+                            p.replace(keyProd->first, i);
+                        }
+                    }
+                    
+                    if(keyProd->second.find(p) == keyProd->second.end())
+                    {
+                        canReplace = false;
+                        break;
+                    }
+
+                    canReplace = true;
+                }
+                
+                if(canReplace)
+                {
+                    // å°†è¢«æ›¿æ¢çš„éç»ˆç»“ç¬¦è®°å½•å¹¶ä»äº§ç”Ÿå¼ä¸­åˆ é™¤
+                    srcDes[keyProd1->first] = keyProd->first;
+                    this->P.erase(keyProd1->first);
+                    this->ReleaseVn(keyProd1->first);
+                }
             }
         }
     }
-
-    while (nonTerminalQueue.size() != 0)
+    
+    auto P = this->P;
+    // è‹¥ä¸ºçœŸï¼Œéœ€è¦åˆ é™¤æŸä¸€æ¡äº§ç”Ÿå¼å¹¶æ’å…¥æ–°çš„æ›¿æ¢è¿‡åçš„äº§ç”Ÿå¼
+    bool needReflash = false;
+    for(auto keyProd : P)
     {
-        this->extractUnReachableProductions(nonTerminalQueue.front(), reach);
-        nonTerminalQueue.pop();
+        for(auto p : keyProd.second)
+        {
+            auto tmp = p;
+            for(auto i = 0;i < p.size(); i++)
+            {
+                const character ch = *p.getIndexCharacter(i);
+                if(srcDes.find(ch) != srcDes.end())
+                {
+                    needReflash = true;
+                    p.replace(srcDes[ch], i);
+                }
+            }
+            if(needReflash)
+            {
+                this->P[keyProd.first].erase(tmp);
+                this->P[keyProd.first].insert(p);
+            }
+            needReflash = false;
+        }
     }
 }
 
-bool Grammar::IsNonTerminal(NonTerminal ch)
+// è¾“å‡ºæ–‡æ³•å››è¦ç´ 
+ostream& grammar::print(std::ostream& os, std::map<character, std::set<production>> *P)
 {
-    return this->m_nonterminalSet.find(ch) != this->m_nonterminalSet.end();
+    if(P == nullptr)
+    {
+        P = &(this->P);
+    }
+    os << "G[ " << this->S << " ] = (Vn, Vt, " << this->S << ", P)\n";
+    os << "Vn = "; 
+    for(auto vn : this->Vn)
+    {
+        os << vn << " ";
+    }
+    os << endl;
+    os << "Vt = ";
+    for(auto vt : this->Vt)
+    {
+        os << vt << " ";
+    }
+    os << endl;
+    os << "P: \n";
+    for (auto p : *P)
+    {
+        cout << p.first << "-->";
+        for(auto prod : p.second)
+        {
+            cout << prod << "   ";
+        }
+        cout << endl;
+    }
 }
 
-bool Grammar::IsTerminal(Terminal ch)
+const std::set<character>& grammar::VN() const
 {
-    return this->m_termianlSet.find(ch) != this->m_termianlSet.end();
+    return this->Vn;
+}
+const std::set<character>& grammar::VT() const
+{
+    return this->Vt;
+}
+const std::map<character, std::set<production>>& grammar::Prodtions() const
+{
+    return this->P;
+}
+const character& grammar::Start() const 
+{
+    return this->S;
 }
 
+//åˆå§‹åŒ–
+void grammar::Init(const std::set<character>& Vn, const std::set<character>& Vt, const character& S, const std::map<character, std::set<production>>& P)
+{
+    this->S = S;
+    this->Vn = Vn;
+    this->Vt = Vt;
+    this->P = P;
+}
+
+void grammar::RemoveUnReachableProduction()
+{
+    set<character> reach;
+    removeUnReachableProduction(this->Start(), this->Prodtions(), this->VN(), reach);
+    auto vn = this->VN();
+    for(auto& ch : vn)
+    {
+        if(reach.find(ch) == reach.end())
+        {
+            this->Vn.erase(ch);
+            this->P.erase(ch);
+        }
+    }
+}
+
+static void removeUnReachableProduction(const character& left, const map<character, set<production>>& prodctionMap, const set<character> Vn, set<character>& reach)
+{
+    queue<character> productionReachQueue;
+
+    // å½“å‰éç»ˆç»“ç¬¦å·²ç»è¢«æ£€æŸ¥è¿‡
+    if(reach.find(left) != reach.end())
+    {
+        return;
+    }
+
+    reach.insert(left);
+    for(auto& prod : prodctionMap.find(left)->second)
+    {
+        size_t i = 0;
+        while(prod.getIndexCharacter(i) != nullptr)
+        {
+            // A->BC B->C Cä¸å¯è¾¾,å› æ­¤è¿™ä¸€æ¡ç†è®ºä¸Šåº”è¯¥æ˜¯ä¸åˆæ³•çš„,æœªè€ƒè™‘è¿™ä¸ªæƒ…å†µ
+            // A->BC B->C C->a é»˜è®¤éƒ½æ˜¯è¿™ç§å¯è¾¾çš„äº§ç”Ÿå¼
+            if(Vn.find(*prod.getIndexCharacter(i)) != Vn.end() && reach.find(*prod.getIndexCharacter(i)) == reach.end())
+            {
+                productionReachQueue.push(*prod.getIndexCharacter(i));
+            }
+            i++;
+        }
+    }
+
+    while(!productionReachQueue.empty())
+    {
+        removeUnReachableProduction(productionReachQueue.front(), prodctionMap, Vn, reach);
+        productionReachQueue.pop();
+    }
+}

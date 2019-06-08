@@ -1,156 +1,90 @@
-#ifndef _GRAMMAR_H_
-#define _GRAMMAR_H_
-#include <map>
+#include "character.h"
 #include <set>
-#include <string>
-#include <vector>
+#include <map>
+#include <ostream>
 
-// ¦ÅµÄÊäÈë±íÏÖĞÎÊ½
-#define EMPTY "$"
-#define EMPTY_CHAR '$'
-#define NON_TERMINAL_BEGIN 'A'
-#define NON_TERMINAL_END 'Z'
+#ifndef GRAMMAR_H
+#define GRAMMAR_H
 
-typedef char Terminal;
-typedef char NonTerminal;
-typedef std::string Prodution;
-
-class Grammar
-{
+// ä½¿ç”¨setçš„åŸå› æ˜¯å› ä¸ºå®ƒä¸åœ¨é›†åˆä¸­ä¸é‡å¤
+// è¯­æ³•åˆ†æ---å®Œæˆæ¶ˆé€’å½’ æ¶ˆå›æº¯ æ¶ˆç©ºäº§ç”Ÿå¼ æ¶ˆä¸å¯è¾¾äº§ç”Ÿå¼
+class grammar {
 private:
-    // ÎÄ·¨²úÉúÊ½¼¯
-    std::map<NonTerminal, std::set<Prodution>> m_production;
-    // ÎÄ·¨¿ªÊ¼·ûºÅ
-    NonTerminal m_S;
-    // ÖÕ½á·ûºÅ¼¯
-    std::set<Terminal> m_termianlSet;
-    // ·ÇÖÕ½á·ûºÅ¼¯
-    std::set<NonTerminal> m_nonterminalSet;
-
-    // Ïû³ı¦Å±í´ïÊ½Ä£¿é
 public:
-    // ÎÄ·¨²úÉúÊ½---Ïû³ı¦Å±í´ïÊ½
-    Grammar& RemoveEmptyExpression();
+    // ç»ˆç»“ç¬¦
+    std::set<character> Vt;
 
-private:
-    // »ñÈ¡¿ÉÒÔÍÆµ¼³ö¦ÅµÄ·ÇÖÕ½á·û¼¯
-    std::set<NonTerminal> *DerivateEmptyExpress();
+    // éç»ˆç»“ç¬¦
+    std::set<character> Vn;
 
-    // Ïû³ı×óµİ¹é
-public:
-    void ExtractLeftRecursion();
+    // æ–‡æ³•å¼€å§‹ç¬¦
+    character S;
 
-private:
-    // ×ª»¯¼ä½Ó×óµİ¹éÎªÖ±½Ó×óµİ¹é(ÈôÓĞ),Ö÷ÒªÍê³ÉÌæ»»¹¦ÄÜ
-    void indirectRecursionToDirect(std::string express, NonTerminal Vn, std::vector<NonTerminal> &VnSet, std::set<std::string> &deletedProductions, std::set<std::string> &insertedProductions);
-    // Ïû³ıÖ±½Ó×óµİ¹é
-    bool ExtractDirectRecursion();
-    // »¯¼ò²úÉúÊ½,Ïû³ı²»¿É´ïµÄ±í´ïÊ½
-public:
-    // »¯¼ò²úÉúÊ½,Ïû³ı²»¿É´ï±í´ïÊ½
-    void ExtractUnReachableProductions();
-private:
-    void extractUnReachableProductions(NonTerminal ch, std::set<NonTerminal>& reach);
-
-    // Ïû³ı»ØËİ
-public:
-    void ExtractBacktracking();    
-
-    // ÇóFIRST, FOLLOW
-public:
-    void FIRST();
-    void FOLLOW(std::map<NonTerminal, std::set<Terminal>>& FIRET);
+    // äº§ç”Ÿå¼é›†
+    std::map<character, std::set<production>> P;
 
 public:
-    Grammar()
-    {
-        this->m_NextAllocPos = 'A';
-        // S¡úaA£¬A¡úBC£¬B¡úbB£¬C¡úcC£¬B¡ú¦Å£¬C¡ú¦Å
-        // S¡úaA£¬A¡úBC£¬B¡úbB£¬C¡úcC£¬A¡úC£¬B¡úb£¬S¡úa£¬A¡úB£¬C¡úc
-        // this->m_S = 'S';
-        // this->m_nonterminalSet.insert('S');
-        // this->m_nonterminalSet.insert('A');
-        // this->m_nonterminalSet.insert('B');
-        // this->m_nonterminalSet.insert('C');
+    // è¯­æ³•åˆ†æ
+    void AnalyzeGrammar();
 
-        // this->m_termianlSet.insert('a');
-        // this->m_termianlSet.insert('b');
-        // this->m_termianlSet.insert('c');
+    // è¾“å‡ºæ–‡æ³•å››è¦ç´ 
+    std::ostream& print(std::ostream& os, std::map<character, std::set<production>> *P = nullptr);
 
-        // this->m_production['S'].insert("aA");
-        // this->m_production['A'].insert("BC");
-        // this->m_production['B'].insert("bB");
-        // this->m_production['C'].insert("cC");
-        // this->m_production['B'].insert("$");
-        // this->m_production['C'].insert("$");
-
-        // S¡úaD£¬S¡úbB£¬A¡úBC£¬D¡úAC£¬B¡úbB£¬C¡úcC£¬B¡ú¦Å£¬C¡ú¦Å
-        // this->m_nonterminalSet.insert('S');
-        // this->m_nonterminalSet.insert('A');
-        // this->m_nonterminalSet.insert('B');
-        // this->m_nonterminalSet.insert('C');
-        // this->m_nonterminalSet.insert('D');
-
-        // this->m_termianlSet.insert('a');
-        // this->m_termianlSet.insert('b');
-        // this->m_termianlSet.insert('c');
-
-        // this->m_production['S'].insert("aD");
-        // this->m_production['S'].insert("bB");
-        // this->m_production['D'].insert("AC");
-        // this->m_production['A'].insert("BC");
-        // this->m_production['B'].insert("bB");
-        // this->m_production['C'].insert("cC");
-        // this->m_production['B'].insert("$");
-        // this->m_production['C'].insert("$");
-
-        // S¡úQc S¡úc Q¡úRb,Q¡úb,R¡úSa,R¡úa
-        this->m_S = 'S';
-        this->m_termianlSet.insert('a');
-        this->m_termianlSet.insert('b');
-        this->m_termianlSet.insert('c');
-
-        this->m_nonterminalSet.insert('S');
-        this->m_nonterminalSet.insert('Q');
-        this->m_nonterminalSet.insert('R');
-
-        this->m_production['S'].insert("Qc");
-        this->m_production['S'].insert("c");
-        this->m_production['Q'].insert("Rb");
-        this->m_production['Q'].insert("b");
-        this->m_production['R'].insert("Sa");
-        this->m_production['R'].insert("a");
-
-        // // S¡úAC S¡úB A¡úa C¡úc C¡úBC E¡úaA E¡úe
-        // this->m_termianlSet.insert('a');
-        // this->m_termianlSet.insert('e');
-        // this->m_termianlSet.insert('c');
-
-        // this->m_nonterminalSet.insert("S");
-        // this->m_nonterminalSet.insert("A");
-        // this->m_nonterminalSet.insert("C");
-        // this->m_nonterminalSet.insert("B");
-        // this->m_nonterminalSet.insert("E");
-
-        // this->m_production["S"].insert("AC");
-        // this->m_production["S"].insert("B");
-        // this->m_production["A"].insert("a");
-        // this->m_production["C"].insert("c");
-        // this->m_production["C"].insert("BC");
-        // this->m_production["E"].insert("aA");
-        // this->m_production["E"].insert("e");
-    }
+    // å®šä¹‰å¯¹è¯­æ³•åˆ†æä¸­å¯¹è¯­æ³•æˆåˆ†çš„åˆ†æå¤„ç†
 public:
-    bool IsTerminal(Terminal ch);
-    bool IsNonTerminal(NonTerminal ch);
+    // æ¶ˆé™¤epsilonäº§ç”Ÿå¼
+    // @param productions æ˜¯ä¸€ä¸ªäº§ç”Ÿå¼çš„é›†åˆï¼Œ keyæ˜¯äº§ç”Ÿå¼çš„å·¦éƒ¨ï¼Œ valueæ˜¯ç›¸åŒå·¦éƒ¨çš„æ‰€æœ‰å³éƒ¨çš„é›†åˆ
+    void RemoveEpsilon(std::map<character, std::set<production>>& productions);
+
+    // åŒ–é—´æ¥å·¦é€’å½’ä¸ºç›´æ¥å·¦é€’å½’
+    // è¦æ±‚äº§ç”Ÿå¼æ— epsilonäº§ç”Ÿå¼ æ— å›è·¯(A->A)
+    // è‹¥å‡ºç°ä¸Šè¯‰æƒ…å†µå°†å¯¼è‡´ç»“æœä¸å‡†ç¡®
+    // @param Vn éç»ˆç»“ç¬¦é›†
+    // @param productions æ˜¯ä¸€ä¸ªäº§ç”Ÿå¼çš„é›†åˆï¼Œ keyæ˜¯äº§ç”Ÿå¼çš„å·¦éƒ¨ï¼Œ valueæ˜¯ç›¸åŒå·¦éƒ¨çš„æ‰€æœ‰å³éƒ¨çš„é›†åˆ, æ˜¯ä¼ å‡ºå‚æ•°
+    void IndirectRecursiveToDirectRecursive(std::set<character>& Vn, std::map<character, std::set<production>>& productions);
+
+    // æ¶ˆé™¤å›æº¯
+    // @param productionMap å¾…å¤„ç†çš„äº§ç”Ÿå¼é›†ï¼Œå¹¶ä½œä¸ºç»“æœè¿”å›ï¼Œæ˜¯ä¸€ä¸ªä¼ å‡ºå‚æ•°
+    void RemoveBacktrack(std::map<character, std::set<production>> *productionMap);
+
+    // æ¶ˆé™¤ç›´æ¥å·¦é€’å½’
+    // ä¸ºå®‰å…¨èµ·è§ï¼Œè°ƒç”¨ä¹‹å‰å»ºè®®å…ˆè°ƒç”¨æ¶ˆé™¤é—´æ¥å·¦é€’å½’
+    // @param productionMap å¾…å¤„ç†çš„äº§ç”Ÿå¼é›†ï¼Œå¹¶ä½œä¸ºç»“æœè¿”å›ï¼Œæ˜¯ä¸€ä¸ªä¼ å‡ºå‚æ•°
+    bool RemoveRecursive(std::map<character, std::set<production>> *productionMap);
+
+    // æ¶ˆé™¤ä¸å¯è¾¾è¡¨è¾¾å¼
+    void RemoveUnReachableProduction();
 
 private:
-    // ´æ·Å´íÎóĞÅÏ¢
-    std::string m_error;
-    // ¼ÇÂ¼ÏÂÒ»´ÎÉêÇë·ÇÖÕ¼«·ûµÄÆğÊ¼Î»ÖÃ,Ó¦±»³õÊ¼»¯Îª A
-    NonTerminal m_NextAllocPos;
-    // ÉêÇëĞÂµÄ·ÇÖÕ½á·û,Ä¿Ç°×î¶àÉêÇë26¸ö(¼´ABCD...)
-    NonTerminal AllocNonTerminal();
+    // æ¶ˆé™¤å›æº¯
+    // è¿™æ˜¯ä¸€ä¸ªå†…éƒ¨å¤„ç†å‡½æ•°ï¼Œè°ƒç”¨ç€åº”è¯¥è°ƒç”¨RemoveBacktrack()
+    // @param originLeft æ˜¯äº§ç”Ÿå¼çš„å·¦éƒ¨
+    // @param ptrProductions æ˜¯æ‰€æœ‰ç›¸åŒå·¦éƒ¨çš„äº§ç”Ÿå¼çš„å³éƒ¨é›†åˆ
+    // @param productionMap äº§ç”Ÿå¼çš„æ˜ å°„å…³ç³»è¡¨
+    void removeBacktrack(const character* originLeft, std::set<production> *ptrProductions, std::map<character, std::set<production>>* const productionMap);
+    
+    // åˆå¹¶é‡å¤çš„æ— æ„ä¹‰çš„è¡¨è¾¾å¼
+    // A -> Ac  D -> Dc åˆ™åˆå¹¶ä¸º A -> Ac
+    void MergeRepeatProduction();
+
+private:
+    // ç”³è¯·æ–°çš„éç»ˆç»“ç¬¦å·
+    bool AllocVn(const character src, character& ch);
+    // é‡Šæ”¾éç»ˆç»“ç¬¦å·
+    void ReleaseVn(const character& vn);
+
+public:
+    // è¿”å›ç§æœ‰å˜é‡çš„å¸¸å€¼
+    const std::set<character>& VN() const;
+
+    const std::set<character>& VT() const;
+
+    const std::map<character, std::set<production>>& Prodtions() const;
+
+    const character& Start() const;
+
+    //åˆå§‹åŒ–
+    void Init(const std::set<character>& Vn, const std::set<character>& Vt, const character& S, const std::map<character, std::set<production>>& P);
 };
 
 #endif
